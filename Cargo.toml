@@ -1,0 +1,17 @@
+[package]
+name = "ccash-market"
+version = "0.0.0"
+edition = "2021"
+authors = ["Samuel Boyden <sam@stboyden.com>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.68"
+axum = "0.6.1"
+directories = "4.0.1"
+serde = { version = "1.0.151", features = ["derive"] }
+serde_json = "1.0.91"
+tokio = { version = "1.23.0", features = ["full"] }
+tracing = { version = "0.1.37", features = ["release_max_level_error", "max_level_info"] }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
