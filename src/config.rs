@@ -14,8 +14,7 @@ impl Config {
         let splits = self.host.split('.');
 
         let vec = splits
-            .map(|num| num.parse::<u8>())
-            .filter_map(|num| num.ok())
+            .filter_map(|num| num.parse::<u8>().ok())
             .collect::<Vec<_>>();
 
         vec.iter()
