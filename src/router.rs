@@ -1,23 +1,27 @@
+use crate::{routes::properties, state::GState};
 use axum::routing::{get, IntoMakeService};
 
-use crate::{routes::properties, state::AppState};
-
 pub struct Router {
-    inner: axum::Router<AppState>,
-    state: AppState,
+    inner: axum::Router<GState>,
+    state: GState,
 }
 
 impl Router {
-    pub fn new(state: AppState) -> Self {
+    pub fn new(state: GState) -> Self {
         Router {
             inner: axum::Router::new(),
             state,
         }
     }
 
+    async fn error() -> &'static str {
+        "Route not found. Please use \"/help\" for help with routes."
+    }
+
     pub fn build(self) -> IntoMakeService<axum::Router> {
         self.inner
-            .route("/properties", get(properties))
+            .route("/api/properties", get(properties))
+            .fallback(Self::error)
             .with_state(self.state)
             .into_make_service()
     }

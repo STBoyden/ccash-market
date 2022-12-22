@@ -38,7 +38,6 @@ impl Config {
 
     pub fn get_market_username(&self) -> &str { &self.market_username }
     pub fn get_market_password(&self) -> &str { &self.market_password }
-
 }
 
 impl Default for Config {

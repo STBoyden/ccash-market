@@ -2,7 +2,9 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::unused_async, clippy::module_name_repetitions)]
 
+mod commodity;
 mod config;
+mod offer;
 mod router;
 mod routes;
 mod state;
@@ -13,6 +15,7 @@ use axum::Server;
 use chrono::Utc;
 use config::Config;
 use directories::ProjectDirs;
+use parking_lot::RwLock;
 use std::{net::SocketAddr, path::Path, sync::Arc};
 use tokio::{
     fs::{create_dir_all, File},
@@ -78,8 +81,8 @@ async fn init_logs() -> Result<()> {
 
     let stdout_log = tracing_subscriber::fmt::layer().compact();
 
-    let data_dir_path = config_dir.data_dir();
-    create_dir_all(data_dir_path).await?;
+    let data_dir_path = config_dir.data_dir().join("logs");
+    create_dir_all(&data_dir_path).await?;
 
     let datetime = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
 
@@ -88,7 +91,10 @@ async fn init_logs() -> Result<()> {
         .into_std()
         .await;
 
-    let debug_log = tracing_subscriber::fmt::layer().with_writer(Arc::new(debug_file));
+    let debug_log = tracing_subscriber::fmt::layer()
+        .compact()
+        .with_ansi(false)
+        .with_writer(Arc::new(debug_file));
 
     tracing_subscriber::registry()
         .with(
@@ -138,27 +144,30 @@ async fn init_config() -> Result<Config> {
     Ok(config)
 }
 
-fn signal_handler() {
+fn signal_handler(state: &Arc<RwLock<AppState>>) {
     tracing::info!("Received termination signal, shutting down gracefully...");
 
-    // TODO: Handle graceful shutdown
+    _ = state.read().save_inventories();
 
     std::process::exit(0);
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    ctrlc::set_handler(signal_handler)?;
-
     init_logs().await?;
     let config = init_config().await?;
 
     let mut state = AppState::from_config(&config);
     state.connect().await?;
 
+    let state_arc = Arc::new(RwLock::new(state));
+
+    let state_arc_clone = state_arc.clone();
+    ctrlc::set_handler(move || signal_handler(&state_arc_clone))?;
+
     let addr = SocketAddr::from((config.get_host(), config.get_port()));
 
-    let router = Router::new(state);
+    let router = Router::new(state_arc);
 
     tracing::info!("Starting on {}...", addr);
 
