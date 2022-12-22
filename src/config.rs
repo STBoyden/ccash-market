@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct Config {
+pub(crate) struct Config {
     host: Cow<'static, str>,
     port: u16,
     ledger_host: Option<String>,
@@ -11,7 +11,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn get_host(&self) -> [u8; 4] {
+    pub(crate) fn get_host(&self) -> [u8; 4] {
         let mut res = [0; 4];
         let splits = self.host.split('.');
 
@@ -27,17 +27,17 @@ impl Config {
         res
     }
 
-    pub fn get_port(&self) -> u16 { self.port }
+    pub(crate) fn get_port(&self) -> u16 { self.port }
 
     #[allow(dead_code)]
-    pub fn set_ledger_host(&mut self, base_url: &str) {
+    pub(crate) fn set_ledger_host(&mut self, base_url: &str) {
         self.ledger_host = Some(base_url.to_owned());
     }
 
-    pub fn get_ledger_host(&self) -> Option<&String> { self.ledger_host.as_ref() }
+    pub(crate) fn get_ledger_host(&self) -> Option<&String> { self.ledger_host.as_ref() }
 
-    pub fn get_market_username(&self) -> &str { &self.market_username }
-    pub fn get_market_password(&self) -> &str { &self.market_password }
+    pub(crate) fn get_market_username(&self) -> &str { &self.market_username }
+    pub(crate) fn get_market_password(&self) -> &str { &self.market_password }
 }
 
 impl Default for Config {

@@ -1,0 +1,12 @@
+POST http://localhost:3030/api/v1/create_ask
+Content-Type: application/json
+
+{
+    "ccash_user": {
+        "username": "jolly"
+    }
+}
+
+###
+
+GET http://localhost:3030/api/properties

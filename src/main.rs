@@ -8,6 +8,7 @@ mod offer;
 mod router;
 mod routes;
 mod state;
+mod user;
 
 use crate::{router::Router, state::AppState};
 use anyhow::Result;
@@ -16,14 +17,17 @@ use chrono::Utc;
 use config::Config;
 use directories::ProjectDirs;
 use parking_lot::RwLock;
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use state::GState;
+use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
 use tokio::{
     fs::{create_dir_all, File},
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+    runtime::Handle,
+    time::{interval_at, Instant},
 };
 use tracing_subscriber::{filter, prelude::*};
 
-pub fn error(message: &str) -> ! {
+pub(crate) fn error(message: &str) -> ! {
     tracing::error!(message);
     tracing::error!("Exiting due to previous error...");
 
@@ -34,7 +38,7 @@ async fn create_initial_config_file(config_path: &Path) -> Result<()> {
     let config_file_path = config_path.join("config.json");
 
     let default_config = serde_json::to_string_pretty(&Config::default())?;
-    let config_file = File::create(config_file_path).await?;
+    let config_file = File::create(&config_file_path).await?;
     let mut bufwriter = BufWriter::new(config_file);
 
     _ = bufwriter.write(default_config.as_bytes()).await?;
@@ -43,6 +47,10 @@ async fn create_initial_config_file(config_path: &Path) -> Result<()> {
     tracing::warn!(
         "A default configuration has been generated, please fill in the fields marked \
          with \"PLEASE CHANGE\" before running again."
+    );
+    tracing::warn!(
+        "Configuration file location: {}",
+        config_file_path.to_string_lossy()
     );
 
     Ok(())
@@ -144,12 +152,32 @@ async fn init_config() -> Result<Config> {
     Ok(config)
 }
 
-fn signal_handler(state: &Arc<RwLock<AppState>>) {
+fn signal_handler(state: &GState) {
     tracing::info!("Received termination signal, shutting down gracefully...");
 
-    _ = state.read().save_inventories();
+    _ = state.read().save_data();
 
     std::process::exit(0);
+}
+
+async fn background_save(state: GState) {
+    const MINUTE: u64 = 60;
+
+    tracing::info!("Saving market data every 5 minutes.");
+
+    let mut interval = interval_at(
+        Instant::now() + Duration::from_secs(MINUTE),
+        Duration::from_secs(5 * MINUTE),
+    );
+
+    loop {
+        interval.tick().await;
+
+        match state.read().save_data() {
+            Ok(_) => tracing::info!("Market data saved!"),
+            Err(e) => tracing::error!("Could not save market data: {e}"),
+        }
+    }
 }
 
 #[tokio::main]
@@ -162,15 +190,19 @@ async fn main() -> Result<()> {
 
     let state_arc = Arc::new(RwLock::new(state));
 
+    let tokio_handle = Handle::current();
+
+    let state_arc_clone = state_arc.clone();
+    tokio_handle.spawn(background_save(state_arc_clone));
+
     let state_arc_clone = state_arc.clone();
     ctrlc::set_handler(move || signal_handler(&state_arc_clone))?;
 
     let addr = SocketAddr::from((config.get_host(), config.get_port()));
 
+    tracing::info!("Starting on http://{addr}...");
+
     let router = Router::new(state_arc);
-
-    tracing::info!("Starting on {}...", addr);
-
     Server::bind(&addr).serve(router.build()).await?;
 
     Ok(())

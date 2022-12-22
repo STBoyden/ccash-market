@@ -1,17 +1,24 @@
-use crate::{commodity::Commodity, config::Config};
+use crate::{
+    commodity::{Commodity, CommodityUID},
+    config::Config,
+    offer::{Offer, OfferUID},
+    user::{User, UserUID},
+};
 use anyhow::{Error, Result};
 use ccash_rs::{methods as m, CCashSession, CCashUser};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use dashmap::DashMap;
 use directories::ProjectDirs;
 use flate2::{bufread::GzDecoder, write::GzEncoder, Compression};
 use parking_lot::RwLock;
-use serde::Serialize;
+use rayon::prelude::{IntoParallelRefIterator, *};
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{create_dir_all, rename, File},
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Read},
     sync::Arc,
 };
+use uuid::Uuid;
 
 pub type GState = Arc<RwLock<AppState>>;
 
@@ -21,19 +28,28 @@ pub struct AppProperties {
     market_username: String,
 }
 
-type Inventories = DashMap<String, Vec<Commodity>>;
+pub(crate) type Commodities = DashMap<CommodityUID, Arc<RwLock<Commodity>>>;
+pub(crate) type Offers = DashMap<OfferUID, Arc<RwLock<Offer>>>;
+pub(crate) type Users = DashMap<UserUID, Arc<RwLock<User>>>;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+struct Data {
+    pub(super) commodities: Commodities,
+    pub(super) offers: Offers,
+    pub(super) users: Users,
+}
+
+#[derive(Debug)]
 pub struct AppState {
     ledger_host: String,
     ccash_session: Option<CCashSession>,
-    market_user: Option<CCashUser>,
+    market_user_uid: Option<UserUID>,
     market_user_details: (String, String),
-    inventories: Inventories,
+    data: Data,
 }
 
 impl AppState {
-    fn get_inventories() -> Inventories {
+    fn get_data() -> Data {
         let Some(project_dir) = ProjectDirs::from("", "", "ccash-market") else {
           tracing::error!("Could not find suitable application directory!");
           std::process::exit(-1);
@@ -50,8 +66,9 @@ impl AppState {
 
         let file = File::options()
             .write(true)
+            .read(true)
             .create(true)
-            .open(data_dir.join("inventories.gz"));
+            .open(data_dir.join("data.gz"));
 
         if let Err(e) = file {
             tracing::error!("{e}");
@@ -60,22 +77,25 @@ impl AppState {
         let file = file.unwrap();
 
         let bufreader = BufReader::new(file);
-        let decoder = GzDecoder::new(bufreader);
+        let mut decoder = GzDecoder::new(bufreader);
+        let mut buffer = String::new();
 
-        let data = serde_json::from_reader::<_, Inventories>(decoder);
+        _ = decoder.read_to_string(&mut buffer);
+
+        let data = serde_json::from_str::<Data>(&buffer);
 
         if let Ok(data) = data {
             data
         } else {
             tracing::warn!(
                 "\"{}\" was empty or could not be read properly, using new data...",
-                data_dir.join("inventories.gz").to_string_lossy()
+                data_dir.join("data.gz").to_string_lossy()
             );
-            Inventories::new()
+            Data::default()
         }
     }
 
-    pub fn save_inventories(&self) -> Result<()> {
+    pub(crate) fn save_data(&self) -> Result<()> {
         let Some(project_dir) = ProjectDirs::from("", "", "ccash-market") else {
             let message = "Could not find suitable application directory!";
 
@@ -89,21 +109,20 @@ impl AppState {
             create_dir_all(data_dir)?;
         }
 
-        let file_path = data_dir.join("inventories.gz");
+        let file_path = data_dir.join("data.gz");
 
         if file_path.exists() {
             let old_file = File::open(&file_path)?;
             let creation_time = DateTime::<Utc>::from(old_file.metadata()?.created()?)
-                .to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+                .to_rfc3339_opts(SecondsFormat::Secs, false);
 
-            let file_name = format!("inventories-{creation_time}.gz.bak");
+            let file_name = format!("data-{creation_time}.gz.bak");
 
             tracing::info!(
-                "Found previous \"inventories.gz\", backing up to \
-                 \"inventories/{file_name}\"."
+                "Found previous \"data.gz\", backing up to \"data/{file_name}\"."
             );
 
-            let backup_dir = data_dir.join("inventories");
+            let backup_dir = data_dir.join("data");
             create_dir_all(&backup_dir)?;
 
             rename(&file_path, backup_dir.join(file_name))?;
@@ -111,22 +130,21 @@ impl AppState {
 
         let file = File::create(&file_path)?;
 
-        tracing::info!(
-            "Writing inventory data to {}...",
-            file_path.to_string_lossy()
-        );
+        tracing::info!("Writing data to {}...", file_path.to_string_lossy());
 
         let bufwriter = BufWriter::new(file);
-        let encoder = GzEncoder::new(bufwriter, Compression::best());
+        let mut encoder = GzEncoder::new(bufwriter, Compression::best());
 
-        serde_json::to_writer(encoder, &self.inventories)?;
+        serde_json::to_writer(&mut encoder, &self.data)?;
+
+        encoder.finish()?;
 
         tracing::info!("... Done!");
 
         Ok(())
     }
 
-    pub fn from_config(config: &Config) -> Self {
+    pub(crate) fn from_config(config: &Config) -> Self {
         let ledger_host = if let Some(ledger_host) = config.get_ledger_host() {
             ledger_host
         } else {
@@ -136,16 +154,16 @@ impl AppState {
         Self {
             ledger_host: ledger_host.to_owned(),
             ccash_session: None,
-            market_user: None,
+            market_user_uid: None,
             market_user_details: (
                 config.get_market_username().to_owned(),
                 config.get_market_password().to_owned(),
             ),
-            inventories: Self::get_inventories(),
+            data: Self::get_data(),
         }
     }
 
-    pub async fn connect(&mut self) -> Result<()> {
+    pub(crate) async fn connect(&mut self) -> Result<()> {
         let mut ccash_session = CCashSession::new(&self.ledger_host);
         ccash_session.establish_connection().await?;
 
@@ -194,21 +212,60 @@ impl AppState {
             return Err(Error::msg(message));
         }
 
-        self.market_user = Some(market_user);
+        let market_user_id = if let Some((id, _)) = self
+            .data
+            .users
+            .par_iter()
+            .map(|rw| (*rw.key(), Arc::clone(rw.value())))
+            .find_first(|(_, user)| {
+                user.read().get_username() == market_user.get_username()
+            }) {
+            id
+        } else {
+            Uuid::new_v4()
+        };
+
+        tracing::info!(
+            "Market user \"{}\" has UUID of {market_user_id}",
+            market_user.get_username()
+        );
+
+        if !self.data.users.contains_key(&market_user_id) {
+            let market_user =
+                Arc::new(RwLock::new(User::new(market_user.get_username())));
+
+            self.data
+                .users
+                .insert(market_user_id, Arc::clone(&market_user));
+        }
+
+        self.market_user_uid = Some(market_user_id);
 
         Ok(())
     }
 
+    fn get_market_user(&self) -> Option<Arc<RwLock<User>>> {
+        let Some(uid) = self.market_user_uid  else {
+            return None;
+        };
+
+        self.data.users.get(&uid).map(|user| Arc::clone(&*user))
+    }
+
     pub fn as_properties(&self) -> AppProperties {
-        let market_username = if self.market_user.is_some() {
-            self.market_user.as_ref().unwrap().get_username()
+        let market_username = if let Some(market_user) = self.get_market_user() {
+            market_user.read().get_username().to_owned()
         } else {
-            "Unknown"
+            "Unknown".into()
         };
 
         AppProperties {
             ledger_host: self.ledger_host.clone(),
-            market_username: market_username.to_owned(),
+            market_username,
         }
     }
+
+    pub(crate) fn get_offers(&self) -> &Offers { &self.data.offers }
+    pub(crate) fn get_commodities(&self) -> &Commodities { &self.data.commodities }
+    pub(crate) fn get_users(&self) -> &Users { &self.data.users }
 }
