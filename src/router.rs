@@ -1,5 +1,5 @@
 use crate::{
-    routes::{create_ask, get_users, properties},
+    routes::{create_ask, create_bid, get_users, properties},
     state::GState,
 };
 use axum::{
@@ -29,6 +29,7 @@ impl Router {
             .route("/api/properties", get(properties))
             .route("/api/v1/get_users", get(get_users))
             .route("/api/v1/create_ask", post(create_ask))
+            .route("/api/v1/create_bid", post(create_bid))
             .route(
                 "/help",
                 get(|| async {

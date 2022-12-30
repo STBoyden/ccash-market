@@ -1,8 +1,14 @@
 use crate::{commodity::CommodityUID, user::UserUID};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use uuid::Uuid;
 
-pub(crate) type OfferUID = Uuid;
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct OfferUID(pub Uuid);
+
+impl fmt::Display for OfferUID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(dead_code)]

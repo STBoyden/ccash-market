@@ -1,5 +1,5 @@
 use crate::{
-    commodity::{Commodity, CommodityUID},
+    commodity::{self, Commodity, CommodityUID},
     config::Config,
     offer::{Offer, OfferUID},
     user::{User, UserUID},
@@ -222,7 +222,7 @@ impl AppState {
             }) {
             id
         } else {
-            Uuid::new_v4()
+            UserUID(Uuid::new_v4())
         };
 
         tracing::info!(
@@ -252,6 +252,99 @@ impl AppState {
         self.data.users.get(&uid).map(|user| Arc::clone(&*user))
     }
 
+    pub fn get_or_add_user(&mut self, user: &CCashUser) -> UserUID {
+        let mut iter = self.data.users.iter().filter(|kv| {
+            let v = kv.value();
+            v.read().get_username() == user.get_username()
+        });
+
+        if let Some(kv) = iter.next() {
+            let uuid = kv.key();
+
+            *uuid
+        } else {
+            let uuid = UserUID(Uuid::new_v4());
+            let user = User::new(user.get_username());
+
+            self.data.users.insert(uuid, Arc::new(RwLock::new(user)));
+
+            uuid
+        }
+    }
+
+    pub fn get_or_add_commodity(
+        &mut self,
+        commodity_name: &str,
+        amount: u64,
+        owner_id: UserUID,
+    ) -> CommodityUID {
+        let mut iter = self.data.commodities.iter().filter(|kv| {
+            let v = kv.value();
+
+            v.read().get_name() == commodity_name
+        });
+
+        if let Some(kv) = iter.next() {
+            let uuid = kv.key();
+
+            *uuid
+        } else {
+            let uuid = CommodityUID(Uuid::new_v4());
+            let commodity =
+                Commodity::new(commodity_name, Some(amount), Some(vec![owner_id]));
+
+            self.data
+                .commodities
+                .insert(uuid, Arc::new(RwLock::new(commodity)));
+
+            uuid
+        }
+    }
+
+    pub fn add_ask(
+        &mut self,
+        commodity_id: CommodityUID,
+        user_id: UserUID,
+        amount: u64,
+        price_per_item: u64,
+    ) -> OfferUID {
+        let offer_id = OfferUID(Uuid::new_v4());
+        let ask = Offer::Ask {
+            user_id,
+            commodity_id,
+            item_amount: amount,
+            price_per_item,
+        };
+
+        self.data
+            .offers
+            .insert(offer_id, Arc::new(RwLock::new(ask)));
+
+        offer_id
+    }
+
+    pub fn add_bid(
+        &mut self,
+        commodity_id: CommodityUID,
+        user_id: UserUID,
+        amount: u64,
+        price_per_item: u64,
+    ) -> OfferUID {
+        let offer_id = OfferUID(Uuid::new_v4());
+        let bid = Offer::Bid {
+            user_id,
+            commodity_id,
+            item_amount: amount,
+            price_per_item,
+        };
+
+        self.data
+            .offers
+            .insert(offer_id, Arc::new(RwLock::new(bid)));
+
+        offer_id
+    }
+
     pub fn as_properties(&self) -> AppProperties {
         let market_username = if let Some(market_user) = self.get_market_user() {
             market_user.read().get_username().to_owned()
@@ -266,6 +359,13 @@ impl AppState {
     }
 
     pub(crate) fn get_offers(&self) -> &Offers { &self.data.offers }
+    pub(crate) fn get_offers_mut(&mut self) -> &mut Offers { &mut self.data.offers }
+
     pub(crate) fn get_commodities(&self) -> &Commodities { &self.data.commodities }
+    pub(crate) fn get_commodities_mut(&mut self) -> &mut Commodities {
+        &mut self.data.commodities
+    }
+
     pub(crate) fn get_users(&self) -> &Users { &self.data.users }
+    pub(crate) fn get_users_mut(&mut self) -> &mut Users { &mut self.data.users }
 }
