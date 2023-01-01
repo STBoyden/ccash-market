@@ -1,12 +1,61 @@
-POST http://localhost:3030/api/v1/create_ask
+GET http://localhost:3030/api/properties
+
+###
+
+GET http://localhost:3030/api/v1/get/users
+
+###
+
+POST http://localhost:3030/api/v1/create/ask
 Content-Type: application/json
+Authorization: Basic <username>:<password>
 
 {
-    "ccash_user": {
-        "username": "jolly"
-    }
+    "commodity_name": "test123",
+    "total_cost": 1020,
+    "cost_per_item": 2
 }
 
 ###
 
-GET http://localhost:3030/api/properties
+POST http://localhost:3030/api/v1/create/bid
+Content-Type: application/json
+Authorization: Basic <username>:<password>
+
+{
+    "commodity_name": "test123",
+    "total_cost": 102,
+    "cost_per_item": 2
+}
+
+###
+
+GET http://localhost:3030/api/v1/get/asks/<username>
+
+###
+
+GET http://localhost:3030/api/v1/get/bids/<username>
+
+###
+
+GET http://localhost:3030/api/v1/get/offers/<username>
+
+###
+
+GET http://localhost:3030/api/v1/get/asks
+
+###
+
+GET http://localhost:3030/api/v1/get/bids
+
+###
+
+GET http://localhost:3030/api/v1/get/offers
+
+###
+
+GET http://localhost:3030/api/v1/get/user/<user uid>
+
+###
+
+GET http://localhost:3030/api/v1/get/commodity/<commodity uid>
