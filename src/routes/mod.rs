@@ -3,7 +3,6 @@ mod offer;
 use crate::state::{AppProperties, GState, Users};
 use axum::{extract::State, Json};
 pub use offer::*;
-// use serde_json::{json, Value};
 
 pub async fn properties(State(state): State<GState>) -> Json<AppProperties> {
     Json(state.read().as_properties())

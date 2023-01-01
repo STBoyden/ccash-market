@@ -89,18 +89,22 @@ impl Router {
                 }
 
                 *ccash_session.write() = Some(session.clone());
+            }
 
-                if let Ok(contains) = m::contains_user(&session, &user).await {
-                    if !contains {
-                        return Err(StatusCode::NOT_FOUND);
-                    }
-                }
+            let session = ccash_session.read().clone().unwrap();
 
-                if let Ok(correct) = m::verify_password(&session, &user).await {
-                    if !correct {
-                        return Err(StatusCode::NOT_FOUND);
-                    }
+            if let Ok(contains) = m::contains_user(&session, &user).await {
+                if !contains {
+                    return Err(StatusCode::NOT_FOUND);
                 }
+            }
+
+            if let Ok(correct) = m::verify_password(&session, &user).await {
+                if !correct {
+                    return Err(StatusCode::NOT_FOUND);
+                }
+            } else {
+                return Err(StatusCode::NOT_FOUND);
             }
         }
 
@@ -108,6 +112,7 @@ impl Router {
         Ok(next.run(req).await)
     }
 
+    #[allow(dead_code)]
     async fn error_handler(
         _method: Method,
         _uri: Uri,
