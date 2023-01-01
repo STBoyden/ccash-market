@@ -111,6 +111,34 @@ impl Default for OfferQueryParams {
     }
 }
 
+pub async fn get_offers(
+    params: Option<Query<OfferQueryParams>>,
+    State(state): State<GState>,
+) -> Result<Json<Vec<Offer>>, Json<Value>> {
+    let Query(OfferQueryParams { limit, sort_by }) = params.unwrap_or_default();
+    let mut limit = limit.unwrap_or(100);
+    let sort_by = sort_by.unwrap_or(OfferSortBy::DateDescending);
+
+    if limit == 0 || limit > MAX_OFFER_RESPONSE {
+        limit = MAX_OFFER_RESPONSE;
+    }
+
+    let state = state.read();
+
+    let offer_ids = state.get_offers();
+    let mut offers = offer_ids
+        .iter()
+        .map(|kv| kv.value().clone())
+        .map(|value| value.read().clone())
+        .collect::<Vec<_>>();
+
+    offers.sort_by(|a, b| offer_sort(sort_by.clone(), a, b));
+
+    let offers = offers.iter().take(limit).cloned().collect::<Vec<_>>();
+
+    Ok(Json(offers))
+}
+
 pub async fn get_offers_for_user(
     params: Option<Query<OfferQueryParams>>,
     State(state): State<GState>,

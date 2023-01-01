@@ -1,7 +1,7 @@
 use crate::{
     routes::{
         create_ask, create_bid, get_asks, get_asks_for_user, get_bids, get_bids_for_user,
-        get_offers_for_user, get_users, properties,
+        get_offers, get_offers_for_user, get_users, properties,
     },
     state::GState,
 };
@@ -125,16 +125,17 @@ impl Router {
 
     fn v1_routes(&self) -> axum::Router<GState> {
         axum::Router::new()
-            .route("/get_users", get(get_users))
-            .route("/get_asks", get(get_asks))
-            .route("/get_asks/:username", get(get_asks_for_user))
-            .route("/get_bids", get(get_bids))
-            .route("/get_bids/:username", get(get_bids_for_user))
-            .route("/get_offers/:username", get(get_offers_for_user))
+            .route("/get/users", get(get_users))
+            .route("/get/asks", get(get_asks))
+            .route("/get/asks/:username", get(get_asks_for_user))
+            .route("/get/bids", get(get_bids))
+            .route("/get/bids/:username", get(get_bids_for_user))
+            .route("/get/offers", get(get_offers))
+            .route("/get/offers/:username", get(get_offers_for_user))
             .merge(
                 axum::Router::new()
-                    .route("/create_ask", post(create_ask))
-                    .route("/create_bid", post(create_bid))
+                    .route("/create/ask", post(create_ask))
+                    .route("/create/bid", post(create_bid))
                     .route_layer(middleware::from_fn_with_state(
                         (self.ccash_session.clone(), self.ccash_uri.clone()),
                         Self::auth,
