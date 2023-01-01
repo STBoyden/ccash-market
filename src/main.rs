@@ -1,4 +1,4 @@
-#![feature(is_some_and)]
+#![feature(is_some_and, let_chains)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::unused_async, clippy::module_name_repetitions)]
 
@@ -202,7 +202,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting on http://{addr}...");
 
-    let router = Router::new(state_arc);
+    let router = Router::new(state_arc, config.get_ledger_host());
     Server::bind(&addr).serve(router.build()).await?;
 
     Ok(())

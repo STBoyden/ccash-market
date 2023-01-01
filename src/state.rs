@@ -1,5 +1,5 @@
 use crate::{
-    commodity::{self, Commodity, CommodityUID},
+    commodity::{Commodity, CommodityUID},
     config::Config,
     offer::{Offer, OfferUID},
     user::{User, UserUID},
@@ -190,13 +190,20 @@ impl AppState {
         let market_user =
             CCashUser::new(&self.market_user_details.0, &self.market_user_details.1)?;
 
-        if !m::contains_user(session, &market_user).await? {
+        let contains = if let Ok(contains) = m::contains_user(session, &market_user).await
+        {
+            contains
+        } else {
+            false
+        };
+
+        if !contains {
             tracing::info!(
                 "Market user with the name \"{}\" doesn't exist. Adding...",
                 market_user.get_username()
             );
 
-            if m::add_user(session, &market_user).await? {
+            if dbg!(m::add_user(session, &market_user).await)? {
                 tracing::info!(
                     "User with name \"{}\" added to CCash instance.",
                     market_user.get_username()
@@ -312,6 +319,7 @@ impl AppState {
         let ask = Offer::Ask {
             user_id,
             commodity_id,
+            datetime: Utc::now(),
             item_amount: amount,
             price_per_item,
         };
@@ -334,6 +342,7 @@ impl AppState {
         let bid = Offer::Bid {
             user_id,
             commodity_id,
+            datetime: Utc::now(),
             item_amount: amount,
             price_per_item,
         };
@@ -359,9 +368,11 @@ impl AppState {
     }
 
     pub(crate) fn get_offers(&self) -> &Offers { &self.data.offers }
-    pub(crate) fn get_offers_mut(&mut self) -> &mut Offers { &mut self.data.offers }
+    // pub(crate) fn get_offers_mut(&mut self) -> &mut Offers { &mut
+    // self.data.offers }
 
-    pub(crate) fn get_commodities(&self) -> &Commodities { &self.data.commodities }
+    // pub(crate) fn get_commodities(&self) -> &Commodities { &self.data.commodities
+    // }
     pub(crate) fn get_commodities_mut(&mut self) -> &mut Commodities {
         &mut self.data.commodities
     }

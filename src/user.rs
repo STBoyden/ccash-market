@@ -29,4 +29,6 @@ impl User {
     pub(crate) fn add_offer_id(&mut self, offer_id: OfferUID) {
         self.offer_ids.insert(0, offer_id);
     }
+
+    pub(crate) fn get_offer_ids(&self) -> &[OfferUID] { &self.offer_ids }
 }

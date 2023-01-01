@@ -28,14 +28,7 @@ impl Config {
     }
 
     pub(crate) fn get_port(&self) -> u16 { self.port }
-
-    #[allow(dead_code)]
-    pub(crate) fn set_ledger_host(&mut self, base_url: &str) {
-        self.ledger_host = Some(base_url.to_owned());
-    }
-
     pub(crate) fn get_ledger_host(&self) -> Option<&String> { self.ledger_host.as_ref() }
-
     pub(crate) fn get_market_username(&self) -> &str { &self.market_username }
     pub(crate) fn get_market_password(&self) -> &str { &self.market_password }
 }
