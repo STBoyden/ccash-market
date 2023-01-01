@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{Error, Result};
 use ccash_rs::{methods as m, CCashSession, CCashUser};
 use chrono::{DateTime, SecondsFormat, Utc};
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use directories::ProjectDirs;
 use flate2::{bufread::GzDecoder, write::GzEncoder, Compression};
 use parking_lot::RwLock;
@@ -297,8 +297,15 @@ impl AppState {
             *uuid
         } else {
             let uuid = CommodityUID(Uuid::new_v4());
-            let commodity =
-                Commodity::new(commodity_name, Some(amount), Some(vec![owner_id]));
+            let commodity = Commodity::new(
+                commodity_name,
+                Some(amount),
+                Some({
+                    let ds = DashSet::new();
+                    ds.insert(owner_id);
+                    ds
+                }),
+            );
 
             self.data
                 .commodities
@@ -371,8 +378,7 @@ impl AppState {
     // pub(crate) fn get_offers_mut(&mut self) -> &mut Offers { &mut
     // self.data.offers }
 
-    // pub(crate) fn get_commodities(&self) -> &Commodities { &self.data.commodities
-    // }
+    pub(crate) fn get_commodities(&self) -> &Commodities { &self.data.commodities }
     pub(crate) fn get_commodities_mut(&mut self) -> &mut Commodities {
         &mut self.data.commodities
     }

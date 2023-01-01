@@ -1,7 +1,8 @@
 use crate::{
     routes::{
         create_ask, create_bid, get_asks, get_asks_for_user, get_bids, get_bids_for_user,
-        get_offers, get_offers_for_user, get_users, properties,
+        get_commodity_from_id, get_offers, get_offers_for_user, get_user_from_id,
+        get_users, properties,
     },
     state::GState,
 };
@@ -132,6 +133,8 @@ impl Router {
             .route("/get/bids/:username", get(get_bids_for_user))
             .route("/get/offers", get(get_offers))
             .route("/get/offers/:username", get(get_offers_for_user))
+            .route("/get/user/:id", get(get_user_from_id))
+            .route("/get/commodity/:id", get(get_commodity_from_id))
             .merge(
                 axum::Router::new()
                     .route("/create/ask", post(create_ask))

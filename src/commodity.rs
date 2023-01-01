@@ -1,4 +1,5 @@
 use crate::user::UserUID;
+use dashmap::DashSet;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;
@@ -11,20 +12,20 @@ impl fmt::Display for CommodityUID {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct Commodity {
+pub struct Commodity {
     name: String,
     size: u64,
-    owners: Vec<UserUID>,
+    owners: DashSet<UserUID>,
 }
 
 impl Commodity {
     pub(crate) fn new(
         name: &str,
         initial_amount: Option<u64>,
-        owner_ids: Option<Vec<UserUID>>,
+        owner_ids: Option<DashSet<UserUID>>,
     ) -> Self {
         let size = initial_amount.unwrap_or(0);
-        let owners = owner_ids.unwrap_or(vec![]);
+        let owners = owner_ids.unwrap_or(DashSet::new());
 
         Self {
             name: name.to_owned(),
@@ -33,10 +34,16 @@ impl Commodity {
         }
     }
 
-    pub(crate) fn get_owner_ids(&self) -> &[UserUID] { &self.owners }
+    pub(crate) fn get_owner_ids(&self) -> Vec<UserUID> {
+        self.owners
+            .iter()
+            .map(|item| *item.key())
+            .collect::<Vec<_>>()
+    }
+
     pub(crate) fn get_name(&self) -> &str { &self.name }
 
     pub(crate) fn add_owner_id(&mut self, user_id: UserUID) {
-        self.owners.insert(0, user_id);
+        self.owners.insert(user_id);
     }
 }
